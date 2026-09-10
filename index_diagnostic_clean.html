@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>eFootball diagnostika</title>
+<style>
+body{margin:0;background:#071015;color:#eef6f8;font:15px Arial;padding:16px}
+.card{background:#101b22;border:1px solid #263842;border-radius:16px;padding:16px;margin-bottom:12px}
+.ok{color:#20c879}.bad{color:#ff6b6b}.muted{color:#9aaab2}
+</style>
+</head>
+<body>
+<div class="card">
+<h2>🧪 eFootball Liga diagnostika</h2>
+<div id="status">JavaScript ishga tushmoqda...</div>
+</div>
+<div id="result"></div>
+
+<script>
+(function(){
+  const status=document.getElementById('status');
+  const result=document.getElementById('result');
+
+  function show(msg, cls){
+    status.innerHTML='<b class="'+(cls||'')+'">'+msg+'</b>';
+  }
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  async function test(url){
+    const controller=new AbortController();
+    const timer=setTimeout(function(){controller.abort()},10000);
+    try{
+      const tg=window.Telegram && window.Telegram.WebApp;
+      const r=await fetch(url,{
+        headers:{
+          'Content-Type':'application/json',
+          'X-Telegram-Init-Data':(tg && tg.initData)||''
+        },
+        signal:controller.signal
+      });
+      const text=await r.text();
+      let data;
+      try{data=text?JSON.parse(text):{}}
+      catch(e){data={raw:text}}
+      if(!r.ok){
+        return {ok:false,msg:'HTTP '+r.status+' — '+(data.error||text||'xato')};
+      }
+      return {ok:true,msg:'Javob keldi'};
+    }catch(e){
+      if(e.name==='AbortError') return {ok:false,msg:'10 soniyada javob kelmadi'};
+      return {ok:false,msg:e.message||String(e)};
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  async function main(){
+    try{
+      const tg=window.Telegram && window.Telegram.WebApp;
+      if(tg){
+        tg.ready();
+        tg.expand();
+      }
+
+      show('🟢 JavaScript ishlayapti','ok');
+
+      let info='<div class="card"><h3>1. Telegram</h3>';
+      info+='<p>WebApp: '+(tg?'✅':'❌')+'</p>';
+      info+='<p>initData: '+(tg && tg.initData?'✅ ('+tg.initData.length+' belgi)':'❌')+'</p>';
+      info+='</div>';
+
+      result.innerHTML=info;
+
+      if(!tg || !tg.initData){
+        result.innerHTML+='<div class="card bad">❌ Telegram initData kelmadi. Mini App Telegram ichidan ochilganini tekshiring.</div>';
+        show('❌ Telegram maʼlumoti kelmadi','bad');
+        return;
+      }
+
+      result.innerHTML+='<div class="card"><h3>2. API test</h3><p id="api1">⏳ /api/me tekshirilmoqda...</p></div>';
+      const me=await test('/api/me');
+
+      document.getElementById('api1').innerHTML=(me.ok?'✅ ':'❌ ')+' /api/me — '+esc(me.msg);
+
+      if(!me.ok){
+        show('❌ /api/me ishlamadi','bad');
+        return;
+      }
+
+      const urls=['/api/standings','/api/top-scorers','/api/season','/api/season/winners'];
+      let out='<div class="card"><h3>3. Asosiy API lar</h3>';
+
+      for(const url of urls){
+        out+='<p id="x'+urls.indexOf(url)+'">⏳ '+url+'...</p>';
+        document.getElementById('api1').parentElement.innerHTML='<h3>2. API test</h3><p id="api1">✅ /api/me — javob keldi</p>'+out+'</div>';
+        const r=await test(url);
+        out=out.replace('⏳ '+url+'...', (r.ok?'✅ ':'❌ ') + url+' — '+esc(r.msg));
+        document.getElementById('api1').parentElement.innerHTML='<h3>2. API test</h3><p id="api1">✅ /api/me — javob keldi</p>'+out+'</div>';
+      }
+
+      show('🟢 Diagnostika tugadi','ok');
+    }catch(e){
+      show('❌ JavaScript xatosi','bad');
+      result.innerHTML+='<div class="card bad"><b>'+esc(e.message||String(e))+'</b><p class="muted">Shu oynaning screenshotini yuboring.</p></div>';
+    }
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>
