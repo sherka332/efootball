@@ -26,8 +26,103 @@ const tg=window.Telegram?.WebApp||{initData:'',ready(){},expand(){}};tg.ready();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&gt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(u,o={}){o.headers={...(o.headers||{}),'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData||''};let r=await fetch(u,o),d=await r.json().catch(()=>({error:'Server xatosi'}));if(!r.ok)throw Error(d.error||'Xatolik');return d}
 function go(x,b){document.querySelectorAll('.nav button').forEach(z=>z.classList.remove('active'));if(b)b.classList.add('active');({home,games,table,schedule,teams,participants,profile,winners,tops,rules,admin:adminPanel}[x])()}
-async function init(){try{let d=await api('/api/me');ME=d.user;ADMIN=d.is_admin;document.getElementById('me').textContent=`👤 ${ME.first_name||''} ${ME.username?'@'+ME.username:''} • ${ME.team_name||'Jamoa tanlanmagan'}`;document.getElementById('adminBtn').classList.toggle('hidden',!ADMIN);home()}catch(e){document.getElementById('app').innerHTML='<div class=card>Telegram Mini App ichidan oching: '+esc(e.message)+'</div>'}}
-async function home(){let [s,t,si,w]=await Promise.all([api('/api/standings'),api('/api/top-scorers'),api('/api/season'),api('/api/season/winners')]);let winnersHtml=si.finished?winnerList(w.winners):`<p class=muted>🏁 Mavsum hali tugamagan. 38-tur yakunlangandan keyin haqiqiy 1, 2 va 3-o'rin egalari shu yerda ko'rsatiladi.</p>`;document.getElementById('app').innerHTML=`<div class=card><h2>🏆 ${si.season}-mavsum</h2><p>Joriy lider: <b>${esc(s[0]?.name||'—')}</b> • ${s[0]?.points||0} ochko</p><p>⚽ Eng ko'p gol: <b>${esc(t[0]?.name||'—')}</b> (${t[0]?.goals||0})</p><p class=muted>${si.finished?'Mavsum yakunlangan':'38 tur tugagach mavsum avtomatik yakunlanadi.'}</p></div><div class=card><h3>🥇🥈🥉 Sovrindorlar</h3>${winnersHtml}</div>`}
+async function init(){
+  try{
+    let d=await api('/api/me');
+
+    if(!d || !d.user){
+      throw Error('Foydalanuvchi maʼlumotlari kelmadi');
+    }
+
+    ME=d.user;
+    ADMIN=!!d.is_admin;
+
+    document.getElementById('me').textContent=
+      `👤 ${ME.first_name||''} ${ME.username?'@'+ME.username:''} • ${ME.team_name||'Jamoa tanlanmagan'}`;
+
+    document.getElementById('adminBtn').classList.toggle('hidden',!ADMIN);
+
+    await home();
+
+  }catch(e){
+    console.error('INIT/HOME ERROR:',e);
+
+    document.getElementById('app').innerHTML=
+      `<div class="card">
+        <h3>❌ Yuklashda xato</h3>
+        <p>${esc(e.message||e)}</p>
+        <button class="primary" onclick="location.reload()">🔄 Qayta urinish</button>
+      </div>`;
+  }
+}
+
+  async function home(){
+  try{
+    let [s,t,si,w]=await Promise.all([
+      api('/api/standings'),
+      api('/api/top-scorers'),
+      api('/api/season'),
+      api('/api/season/winners')
+    ]);
+
+    console.log('HOME DATA:',{s,t,si,w});
+
+    s=Array.isArray(s)?s:[];
+    t=Array.isArray(t)?t:[];
+    si=si||{};
+    w=w||{};
+
+    let winnersHtml=si.finished
+      ? winnerList(w.winners||[])
+      : <p class="muted">
+          🏁 Mavsum hali tugamagan. 38-tur yakunlangandan keyin
+          haqiqiy 1, 2 va 3-o'rin egalari shu yerda ko'rsatiladi.
+        </p>;
+
+document.getElementById('app').innerHTML=
+      <div class="card">
+        <h2>🏆 ${esc(si.season||1)}-mavsum</h2>
+
+        <p>
+          Joriy lider:
+          <b>${esc(s[0]?.name||'—')}</b>
+          • ${s[0]?.points||0} ochko
+        </p>
+
+        <p>
+          ⚽ Eng ko'p gol:
+          <b>${esc(t[0]?.name||'—')}</b>
+          (${t[0]?.goals||0})
+        </p>
+
+        <p class="muted">
+          ${si.finished
+            ? 'Mavsum yakunlangan'
+            : '38 tur tugagach mavsum avtomatik yakunlanadi.'}
+        </p>
+      </div>
+
+    <div class="card">
+        <h3>🥇🥈🥉 Sovrindorlar</h3>
+        ${winnersHtml}
+      </div>
+    ;
+
+  }catch(e){
+    console.error('HOME ERROR:',e);
+
+    document.getElementById('app').innerHTML=
+      <div class="card">
+        <h3>❌ Bosh sahifani yuklashda xato</h3>
+        <p>${esc(e.message||e)}</p>
+        <button class="primary" onclick="home()">
+          🔄 Qayta urinish
+        </button>
+      </div>
+    ;
+  }
+  }
+  
 function winnerList(list){if(!list?.length)return '<p class=muted>Sovrindorlar hali aniqlanmagan.</p>';let icons=['🥇','🥈','🥉'];return list.map(x=>`<div class=winner click onclick="openProfile(${x.telegram_id})"><span style="font-size:25px">${icons[x.place-1]}</span>${x.logo?`<img src="${x.logo}">`:''}<span><b>${esc(x.team||'Jamoa')}</b><br><small>${x.username?'@'+esc(x.username):esc(x.name)}</small></span></div>`).join('')}
 async function games(){let d=await api('/api/my_matches');let ms=d.matches||[];document.getElementById('app').innerHTML='<h2>Mening o\'yinlarim</h2>'+(ms.length?ms.map(m=>`<div class=card><div class=row><b>${m.round_no}-tur</b><span class=tag>${m.round_date} • ${m.deadline}</span></div><div class=row><span>${esc(m.home)}</span><b class=score>${m.status==='scheduled'?'VS':m.status==='pending'?m.pending_home_goals+':'+m.pending_away_goals:m.home_goals+':'+m.away_goals}</b><span>${esc(m.away)}</span></div>${m.status==='scheduled'?`<div class=row><input id=h${m.id} type=number min=0 placeholder="Uy gol"><input id=a${m.id} type=number min=0 placeholder="Mehmon gol"></div><div class=actions><button class=primary onclick="submit(${m.id})">⚽ Natijani yuborish</button></div>`:''}${m.status==='pending'&&m.can_confirm?`<div class=actions><button class=primary onclick="confirmR(${m.id})">✅ Tasdiqlash</button><button onclick="rejectR(${m.id})">❌ Rad etish</button></div>`:''}<p class=muted>Holat: ${m.status==='auto'?'Deadline avtomatik tasdiqladi':m.status}</p></div>`).join(''):'<div class=card>Hali o\'yin yo\'q. Avval jamoa tanlang yoki admin turlarni yaratsin.</div>')}
 async function submit(id){try{let h=document.getElementById('h'+id).value,a=document.getElementById('a'+id).value;if(h===''||a==='')throw Error('Ikkala hisobni ham kiriting');await api('/api/result/submit',{method:'POST',body:JSON.stringify({match_id:id,home_goals:+h,away_goals:+a})});games()}catch(e){alert(e.message)}}
